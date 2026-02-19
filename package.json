@@ -1,0 +1,81 @@
+{
+  "name": "git-compare",
+  "displayName": "Git Compare",
+  "description": "Show a tree of git changes between your branch and the main branch",
+  "version": "0.1.0",
+  "publisher": "shiroyasha",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers"
+  ],
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "git-compare",
+          "title": "Git Compare",
+          "icon": "$(git-compare)"
+        }
+      ]
+    },
+    "views": {
+      "git-compare": [
+        {
+          "id": "gitCompareTree",
+          "name": "Changed Files"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gitCompare.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Git Compare"
+      },
+      {
+        "command": "gitCompare.openDiff",
+        "title": "Open Diff",
+        "category": "Git Compare"
+      },
+      {
+        "command": "gitCompare.setBaseBranch",
+        "title": "Set Base Branch...",
+        "icon": "$(git-branch)",
+        "category": "Git Compare"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "gitCompare.setBaseBranch",
+          "when": "view == gitCompareTree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitCompare.refresh",
+          "when": "view == gitCompareTree",
+          "group": "navigation@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
