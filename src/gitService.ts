@@ -41,33 +41,43 @@ export class GitService {
       mergeBase = baseBranch;
     }
 
-    const output = await exec(
-      `git diff --name-status ${mergeBase}`,
-      this.workspaceRoot
-    );
+    const [diffOutput, untrackedOutput] = await Promise.all([
+      exec(`git diff --name-status ${mergeBase}`, this.workspaceRoot),
+      exec("git ls-files --others --exclude-standard", this.workspaceRoot).catch(() => ""),
+    ]);
 
-    if (!output) {
-      return [];
+    const files: ChangedFile[] = [];
+
+    if (diffOutput) {
+      for (const line of diffOutput.split("\n")) {
+        const parts = line.split("\t");
+        const rawStatus = parts[0];
+
+        if (rawStatus.startsWith("R") || rawStatus.startsWith("C")) {
+          files.push({
+            status: rawStatus[0] as FileStatus,
+            oldPath: parts[1],
+            path: parts[2],
+          });
+        } else {
+          files.push({
+            status: rawStatus[0] as FileStatus,
+            path: parts[1],
+          });
+        }
+      }
     }
 
-    return output.split("\n").map((line) => {
-      const parts = line.split("\t");
-      const rawStatus = parts[0];
-
-      // Renames show as R100\told\tnew
-      if (rawStatus.startsWith("R") || rawStatus.startsWith("C")) {
-        return {
-          status: rawStatus[0] as FileStatus,
-          oldPath: parts[1],
-          path: parts[2],
-        };
+    if (untrackedOutput) {
+      const trackedPaths = new Set(files.map((f) => f.path));
+      for (const filePath of untrackedOutput.split("\n")) {
+        if (filePath && !trackedPaths.has(filePath)) {
+          files.push({ status: "A", path: filePath });
+        }
       }
+    }
 
-      return {
-        status: rawStatus[0] as FileStatus,
-        path: parts[1],
-      };
-    });
+    return files;
   }
 
   async getBranches(): Promise<string[]> {
