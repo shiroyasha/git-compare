@@ -33,11 +33,12 @@ export class FileNode {
 class FolderNode {
   readonly type = "folder" as const;
   children: Map<string, TreeNode> = new Map();
+  displayLabel?: string;
 
   constructor(public readonly folderPath: string) {}
 
   get label(): string {
-    return path.basename(this.folderPath) || this.folderPath;
+    return this.displayLabel ?? (path.basename(this.folderPath) || this.folderPath);
   }
 }
 
@@ -174,9 +175,10 @@ export class GitCompareProvider implements vscode.TreeDataProvider<TreeNode> {
         if (child.children.size === 1) {
           const [grandchildKey, grandchild] = child.children.entries().next().value!;
           if (grandchild.type === "folder") {
-            const merged = new FolderNode(grandchild.folderPath);
-            merged.children = new Map(grandchild.children);
             const mergedKey = `${key}/${grandchildKey}`;
+            const merged = new FolderNode(grandchild.folderPath);
+            merged.displayLabel = mergedKey;
+            merged.children = new Map(grandchild.children);
             folder.children.delete(key);
             folder.children.set(mergedKey, merged);
           }
