@@ -2,7 +2,7 @@
   "name": "git-compare",
   "displayName": "Git Compare",
   "description": "Show a tree of git changes between your branch and the main branch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "shiroyasha",
   "license": "MIT",
   "engines": {
