@@ -27,7 +27,11 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("gitCompareTree", webviewProvider),
+    vscode.window.registerWebviewViewProvider("gitCompareTree", webviewProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
+      },
+    }),
 
     vscode.commands.registerCommand("gitCompare.refresh", () => {
       void refreshView();
