@@ -71,19 +71,12 @@ export class GitCompareWebviewProvider implements vscode.WebviewViewProvider {
     if (!this.view) {
       return;
     }
-    this.view.webview.html = getWebviewHtml(this.view.webview, this.state, this.extensionUri);
+    this.view.webview.html = getWebviewHtml(this.view.webview, this.state);
   }
 }
 
-function getWebviewHtml(
-  webview: vscode.Webview,
-  state: GitCompareViewState,
-  extensionUri: vscode.Uri
-): string {
+function getWebviewHtml(webview: vscode.Webview, state: GitCompareViewState): string {
   const nonce = createNonce();
-  const codiconCssUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, "node_modules", "@vscode", "codicons", "dist", "codicon.css")
-  );
   const content = state.nodes.map(renderNode).join("");
   const totals = getTotals(state.nodes);
   const plusSummary = totals.additions > 0 ? `<span class="plus">+${totals.additions}</span>` : "";
@@ -96,9 +89,8 @@ function getWebviewHtml(
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="${codiconCssUri}" rel="stylesheet" />
   <style>
     :root {
       --gc-bg: var(--vscode-sideBar-background);
@@ -107,7 +99,7 @@ function getWebviewHtml(
       --gc-border: var(--vscode-sideBar-border, var(--vscode-panel-border));
       --gc-hover: var(--vscode-list-hoverBackground);
       --gc-hover-fg: var(--vscode-list-hoverForeground, var(--gc-fg));
-      --gc-tree-gutter: 18px;
+      --gc-tree-gutter: 22px;
     }
     body {
       margin: 0;
@@ -168,22 +160,25 @@ function getWebviewHtml(
       color: var(--gc-hover-fg);
     }
     .folder-chevron {
-      color: var(--vscode-icon-foreground, var(--vscode-descriptionForeground));
-      width: 8px;
+      width: 12px;
+      height: 12px;
       margin-right: 10px;
       flex: 0 0 auto;
-      line-height: 8px;
+      color: var(--vscode-icon-foreground, var(--vscode-descriptionForeground));
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      display: block;
     }
-    .folder-chevron::before {
-      font-size: 12px;
-    }
-    .folder-chevron.down {
+    .folder-chevron-chevron-down {
       display: none;
     }
-    details[open] > summary .folder-chevron.down {
-      display: inline-block;
+    details[open] > summary .folder-chevron-chevron-down {
+      display: block;
     }
-    details[open] > summary .folder-chevron.right {
+    details[open] > summary .folder-chevron-chevron-right {
       display: none;
     }
     .children {
@@ -267,8 +262,12 @@ function renderNode(node: ChangedTreeNode): string {
     const children = node.children.map(renderNode).join("");
     return `<details open>
       <summary>
-        <span class="codicon codicon-chevron-right folder-chevron right" aria-hidden="true"></span>
-        <span class="codicon codicon-chevron-down folder-chevron down" aria-hidden="true"></span>
+        <svg class="folder-chevron folder-chevron-chevron-right" viewBox="0 0 16 16" aria-hidden="true">
+          <polyline points="6,4 10,8 6,12"></polyline>
+        </svg>
+        <svg class="folder-chevron folder-chevron-chevron-down" viewBox="0 0 16 16" aria-hidden="true">
+          <polyline points="4,6 8,10 12,6"></polyline>
+        </svg>
         <span class="folder-label">${escapeHtml(node.label)}</span>
       </summary>
       <div class="children">${children}</div>
