@@ -5,6 +5,10 @@
   "version": "0.2.0",
   "publisher": "shiroyasha",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shiroyasha/git-compare.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
