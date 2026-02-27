@@ -107,6 +107,7 @@ function getWebviewHtml(
       --gc-border: var(--vscode-sideBar-border, var(--vscode-panel-border));
       --gc-hover: var(--vscode-list-hoverBackground);
       --gc-hover-fg: var(--vscode-list-hoverForeground, var(--gc-fg));
+      --gc-tree-gutter: 18px;
     }
     body {
       margin: 0;
@@ -168,10 +169,13 @@ function getWebviewHtml(
     }
     .folder-chevron {
       color: var(--vscode-icon-foreground, var(--vscode-descriptionForeground));
-      margin-right: 8px;
+      width: 8px;
+      margin-right: 10px;
       flex: 0 0 auto;
-      font-size: 14px;
-      line-height: 14px;
+      line-height: 8px;
+    }
+    .folder-chevron::before {
+      font-size: 12px;
     }
     .folder-chevron.down {
       display: none;
@@ -183,7 +187,7 @@ function getWebviewHtml(
       display: none;
     }
     .children {
-      margin-left: 14px;
+      margin-left: var(--gc-tree-gutter);
     }
     .file-row {
       width: 100%;
