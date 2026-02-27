@@ -1,5 +1,10 @@
 import * as vscode from "vscode";
-import { GitCompareProvider, DECORATION_SCHEME } from "./gitCompareProvider";
+import { buildChangedFilesTree } from "./changedFilesModel";
+import {
+  GitCompareWebviewProvider,
+  OpenDiffPayload,
+} from "./gitCompareWebviewProvider";
+import { FileStatus, GitService } from "./gitService";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -7,82 +12,113 @@ export function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  const provider = new GitCompareProvider(workspaceRoot);
-
-  const treeView = vscode.window.createTreeView("gitCompareTree", {
-    treeDataProvider: provider,
-    showCollapseAll: true,
+  const gitService = new GitService(workspaceRoot);
+  let baseBranch = "main";
+  const webviewProvider = new GitCompareWebviewProvider(context.extensionUri, {
+    onRefresh: () => {
+      void refreshView();
+    },
+    onSetBaseBranch: () => {
+      void setBaseBranch();
+    },
+    onOpenDiff: (payload) => {
+      void openDiff(payload);
+    },
   });
 
-  treeView.description = provider.getBaseBranch();
-
   context.subscriptions.push(
-    treeView,
+    vscode.window.registerWebviewViewProvider("gitCompareTree", webviewProvider),
 
     vscode.commands.registerCommand("gitCompare.refresh", () => {
-      provider.refresh();
+      void refreshView();
     }),
 
-    vscode.commands.registerCommand("gitCompare.openDiff", async (fileNode) => {
-      if (!fileNode || fileNode.type !== "file") {
+    vscode.commands.registerCommand("gitCompare.openDiff", async (targetInput) => {
+      const target = toDiffTarget(targetInput);
+      if (!target) {
         return;
       }
-
-      const gitService = provider.getGitService();
-      const filePath = fileNode.relativePath;
-      const rightUri = vscode.Uri.file(gitService.getAbsolutePath(filePath));
-
-      if (fileNode.status === "A") {
-        await vscode.commands.executeCommand("vscode.open", rightUri);
-        return;
-      }
-
-      if (fileNode.status === "D") {
-        const mergeBase = await gitService.getMergeBaseRef(provider.getBaseBranch());
-        const leftUri = vscode.Uri.parse(`git-compare-base:${filePath}?${mergeBase}`);
-        await vscode.commands.executeCommand("vscode.open", leftUri);
-        return;
-      }
-
-      try {
-        const mergeBase = await gitService.getMergeBaseRef(provider.getBaseBranch());
-        const baseRef = mergeBase.substring(0, 8);
-        const leftUri = toGitUri(filePath, mergeBase, workspaceRoot);
-        const title = `${filePath} (${baseRef} ↔ Working Tree)`;
-        await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title);
-      } catch (e: any) {
-        vscode.window.showErrorMessage(`Failed to open diff: ${e.message}`);
-      }
+      await openDiff(target);
     }),
 
     vscode.commands.registerCommand("gitCompare.setBaseBranch", async () => {
-      const gitService = provider.getGitService();
-      let branches: string[];
-      try {
-        branches = await gitService.getBranches();
-      } catch {
-        branches = ["main", "master", "develop"];
-      }
-
-      const picked = await vscode.window.showQuickPick(branches, {
-        placeHolder: `Current base: ${provider.getBaseBranch()}. Pick a new base branch.`,
-      });
-
-      if (picked) {
-        provider.setBaseBranch(picked);
-        treeView.description = picked;
-      }
+      await setBaseBranch();
     }),
 
-    registerBaseContentProvider(workspaceRoot),
-    registerFileDecorationProvider()
+    registerBaseContentProvider(workspaceRoot)
   );
 
   const gitWatcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(workspaceRoot, ".git/HEAD")
   );
-  gitWatcher.onDidChange(() => provider.refresh());
+  gitWatcher.onDidChange(() => {
+    void refreshView();
+  });
   context.subscriptions.push(gitWatcher);
+
+  void refreshView();
+
+  async function openDiff(target: OpenDiffPayload): Promise<void> {
+    const filePath = target.path;
+    const status = target.status;
+    try {
+      const rightUri = vscode.Uri.file(gitService.getAbsolutePath(filePath));
+
+      if (status === "A") {
+        await vscode.commands.executeCommand("vscode.open", rightUri);
+        return;
+      }
+
+      const mergeBase = await gitService.getMergeBaseRef(baseBranch);
+      if (status === "D") {
+        const leftUri = vscode.Uri.parse(`git-compare-base:${filePath}?${mergeBase}`);
+        await vscode.commands.executeCommand("vscode.open", leftUri);
+        return;
+      }
+
+      const baseRef = mergeBase.substring(0, 8);
+      const leftUri = toGitUri(filePath, mergeBase);
+      const title = `${filePath} (${baseRef} ↔ Working Tree)`;
+      await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title);
+    } catch (e: any) {
+      vscode.window.showErrorMessage(`Failed to open diff: ${e.message}`);
+    }
+  }
+
+  async function setBaseBranch(): Promise<void> {
+    let branches: string[];
+    try {
+      branches = await gitService.getBranches();
+    } catch {
+      branches = ["main", "master", "develop"];
+    }
+
+    const picked = await vscode.window.showQuickPick(branches, {
+      placeHolder: `Current base: ${baseBranch}. Pick a new base branch.`,
+    });
+    if (!picked) {
+      return;
+    }
+
+    baseBranch = picked;
+    await refreshView();
+  }
+
+  async function refreshView(): Promise<void> {
+    try {
+      const files = await gitService.getChangedFiles(baseBranch);
+      webviewProvider.setState({
+        baseBranch,
+        nodes: buildChangedFilesTree(files),
+      });
+    } catch (e: any) {
+      vscode.window.showWarningMessage(`Git Compare: ${e.message}`);
+      webviewProvider.setState({
+        baseBranch,
+        nodes: [],
+      });
+    }
+  }
 }
 
 /**
@@ -111,56 +147,25 @@ function registerBaseContentProvider(workspaceRoot: string): vscode.Disposable {
     },
   });
 }
+function toDiffTarget(input: any): OpenDiffPayload | undefined {
+  if (!input || typeof input !== "object") {
+    return undefined;
+  }
 
-const DECORATION_COLORS: Record<string, vscode.ThemeColor> = {
-  A: new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
-  M: new vscode.ThemeColor("gitDecoration.modifiedResourceForeground"),
-  D: new vscode.ThemeColor("gitDecoration.deletedResourceForeground"),
-  R: new vscode.ThemeColor("gitDecoration.renamedResourceForeground"),
-  C: new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
-  U: new vscode.ThemeColor("gitDecoration.conflictingResourceForeground"),
-};
+  const status = input.status as FileStatus | undefined;
+  const filePath = (input.path as string | undefined) ?? (input.relativePath as string | undefined);
+  if (!filePath || !status) {
+    return undefined;
+  }
 
-const DECORATION_BADGES: Record<string, string> = {
-  A: "A",
-  M: "M",
-  D: "D",
-  R: "R",
-  C: "C",
-  T: "T",
-  U: "U",
-};
-
-const DECORATION_TOOLTIPS: Record<string, string> = {
-  A: "Added",
-  M: "Modified",
-  D: "Deleted",
-  R: "Renamed",
-  C: "Copied",
-  T: "Type changed",
-  U: "Unmerged",
-};
-
-function registerFileDecorationProvider(): vscode.Disposable {
-  return vscode.window.registerFileDecorationProvider({
-    provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-      if (uri.scheme !== DECORATION_SCHEME) {
-        return undefined;
-      }
-
-      const params = new URLSearchParams(uri.query);
-      const status = params.get("status") ?? "";
-
-      return {
-        badge: DECORATION_BADGES[status],
-        color: DECORATION_COLORS[status],
-        tooltip: DECORATION_TOOLTIPS[status],
-      };
-    },
-  });
+  return {
+    path: filePath,
+    status,
+    oldPath: input.oldPath as string | undefined,
+  };
 }
 
-function toGitUri(relativePath: string, ref: string, _workspaceRoot: string): vscode.Uri {
+function toGitUri(relativePath: string, ref: string): vscode.Uri {
   return vscode.Uri.parse(`git-compare-base:${relativePath}?${ref}`);
 }
 
