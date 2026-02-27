@@ -23,7 +23,7 @@ Then press **F5** to launch the Extension Development Host, or install the `.vsi
 
 ```bash
 npx vsce package
-code --install-extension git-compare-0.1.0.vsix
+code --install-extension git-compare-0.2.0.vsix
 ```
 
 ## Usage
